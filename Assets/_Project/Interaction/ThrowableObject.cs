@@ -1,7 +1,11 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class ThrowableObject : MonoBehaviour
 {
+    [Header("Settings")]
+    public float damageMultiplier = 2f;
+
     private Rigidbody rb;
     private bool isHeld = false;
 
@@ -35,11 +39,18 @@ public class ThrowableObject : MonoBehaviour
     {
         if (isHeld) return;
 
-        var enemy = collision.collider.GetComponent<Enemy>();
-        if (enemy != null)
+        // 인터페이스 기반 공격 처리
+        var target = collision.collider.GetComponent<IDamageable>();
+
+        if (target != null)
         {
-            float damage = rb.velocity.magnitude * 2f;
-            enemy.TakeDamage(damage);
+            float damage = CalculateDamage();
+            target.TakeDamage(damage);
         }
+    }
+
+    float CalculateDamage()
+    {
+        return rb.velocity.magnitude * damageMultiplier;
     }
 }

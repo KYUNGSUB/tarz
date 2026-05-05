@@ -395,10 +395,17 @@ MonoBehaviour:
   wallTilemap: {fileID: 109837738}
   floorTile: {fileID: 11400000, guid: b870332e5605c7744979e208512a6203, type: 2}
   wallTile: {fileID: 11400000, guid: b49458731d9ea244ebf6237166f0f7c8, type: 2}
+  bossTile: {fileID: 11400000, guid: bdd32d1168132d8419c9322676aced6f, type: 2}
+  secretTile: {fileID: 11400000, guid: 985380858ac22244fb0185413e05bc8b, type: 2}
+  rewardTile: {fileID: 11400000, guid: 6112756721d4ea840b73af6de263d9ff, type: 2}
+  explorationTile: {fileID: 11400000, guid: 6128e7dc1ab25004e932152865eec450, type: 2}
+  combatTile: {fileID: 11400000, guid: bc1fdc8d4136c3745b434ce7afb3b8ff, type: 2}
   mapWidth: 80
   mapHeight: 80
   minSplitSize: 20
   minRoomSize: 8
+  seed: 69
+  useRandomSeed: 0
 --- !u!4 &625153336
 Transform:
   m_ObjectHideFlags: 0

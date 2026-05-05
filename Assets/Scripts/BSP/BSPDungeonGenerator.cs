@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using System.IO;
 
 public class BSPDungeonGenerator : MonoBehaviour
 {
@@ -11,6 +12,12 @@ public class BSPDungeonGenerator : MonoBehaviour
     public TileBase floorTile;
     public TileBase wallTile;
 
+    public TileBase bossTile;
+    public TileBase secretTile;
+    public TileBase rewardTile;
+    public TileBase explorationTile;
+    public TileBase combatTile;
+
     [Header("Map Settings")]
     public int mapWidth = 80;
     public int mapHeight = 80;
@@ -19,9 +26,24 @@ public class BSPDungeonGenerator : MonoBehaviour
     public int minSplitSize = 20;
     public int minRoomSize = 8;
 
+    [Header("Seed Settings")]
+    public int seed = 123456;
+    public bool useRandomSeed = true;
+
     private BSPNode root;
-    private List<RectInt> rooms = new List<RectInt>();
+    // private List<RectInt> rooms = new List<RectInt>();
+    List<BSPNode> rooms = new List<BSPNode>();
     private List<Vector2Int> corridors = new List<Vector2Int>();
+
+    public enum RoomType
+    {
+        None,
+        Combat,
+        Exploration,
+        Secret,
+        Boss,
+        Reward
+    }
 
     void Start()
     {
@@ -31,16 +53,55 @@ public class BSPDungeonGenerator : MonoBehaviour
     public void GenerateDungeon()
     {
         ClearMap();
+        
+        // 1. 저장된 seed 로드 시도
+        bool loaded = LoadSeed();
 
+        // 2. seed 결정
+        if (!loaded)
+        {
+            if (useRandomSeed)
+            {
+                seed = System.DateTime.Now.Millisecond;
+            }
+        }
+
+        // 3. 랜덤 초기화 (핵심)
+        Random.InitState(seed);
+
+        Debug.Log("Current Seed: " + seed);
+
+        // 4. 기존 BSP 로직 그대로 유지
         root = new BSPNode(new RectInt(0, 0, mapWidth, mapHeight));
 
         Split(root);
         CreateRooms(root);
         ConnectRooms(root);
 
+        // ★ 추가
+        rooms.Clear();
+        CollectRooms(root);
+
+        AssignRoomTypes();
+
         DrawRooms();
         DrawCorridors();
         DrawWalls();
+
+        // 5. 생성 후 seed 저장
+        SaveSeed();
+    }
+
+    public void GenerateNewMap()    // 강제로 새로운 맵 만들기
+    {
+        useRandomSeed = true;
+
+        // 기존 파일 삭제
+        string path = GetSeedPath();
+        if (File.Exists(path))
+            File.Delete(path);
+
+        GenerateDungeon();
     }
 
     class BSPNode
@@ -49,6 +110,15 @@ public class BSPDungeonGenerator : MonoBehaviour
         public BSPNode left;
         public BSPNode right;
         public RectInt room;
+
+        // 추가
+        public RoomType roomType = RoomType.None;
+        public Vector2Int Center => new Vector2Int(
+            room.x + room.width / 2,
+            room.y + room.height / 2
+        );
+
+        public List<BSPNode> connectedNodes = new List<BSPNode>();
 
         public BSPNode(RectInt area)
         {
@@ -59,6 +129,50 @@ public class BSPDungeonGenerator : MonoBehaviour
         {
             return left == null && right == null;
         }
+    }
+
+    [System.Serializable]
+    public class MapSeedData
+    {
+        public int seed;
+        // public int difficulty;   // seed +  게임 상태 함께 관리
+        // public int level;
+    }
+
+    string GetSeedPath()
+    {
+        string seedPath = Application.persistentDataPath + "/mapSeed.json";
+        Debug.Log("mapSeed.json Path : " + seedPath);   // Users\ksseo\AppData\LocalLow\DaultCompany\TARZ
+        return seedPath;
+    }
+
+    void SaveSeed()
+    {
+        MapSeedData data = new MapSeedData();
+        data.seed = seed;
+
+        string json = JsonUtility.ToJson(data, true);
+        File.WriteAllText(GetSeedPath(), json);
+
+        Debug.Log("Seed Saved: " + seed);
+    }
+
+    bool LoadSeed()
+    {
+        string path = GetSeedPath();
+
+        if (File.Exists(path))
+        {
+            string json = File.ReadAllText(path);
+            MapSeedData data = JsonUtility.FromJson<MapSeedData>(json);
+
+            seed = data.seed;
+            Debug.Log("Seed Loaded: " + seed);
+
+            return true;
+        }
+
+        return false;
     }
 
     void Split(BSPNode node)
@@ -144,7 +258,7 @@ public class BSPDungeonGenerator : MonoBehaviour
             int y = Random.Range(node.area.y + 1, node.area.yMax - roomHeight - 1);
 
             node.room = new RectInt(x, y, roomWidth, roomHeight);
-            rooms.Add(node.room);
+            rooms.Add(node);
         }
         else
         {
@@ -161,6 +275,10 @@ public class BSPDungeonGenerator : MonoBehaviour
             Vector2Int p2 = GetRoomCenter(node.right);
 
             CreateCorridor(p1, p2);
+
+            // ★ 추가: 연결 정보 저장
+            node.left.connectedNodes.Add(node.right);
+            node.right.connectedNodes.Add(node.left);
 
             ConnectRooms(node.left);
             ConnectRooms(node.right);
@@ -198,13 +316,49 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     void DrawRooms()
     {
-        foreach (var room in rooms)
+        foreach (var node in rooms)
         {
+            RectInt room = node.room;
+
+            // 방 유효성 체크
+            if (room.width <= 0 || room.height <= 0)
+                continue;
+
+            TileBase tile = floorTile;
+
+            switch (node.roomType)
+            {
+                case RoomType.Boss:
+                    tile = bossTile;
+                    break;
+
+                case RoomType.Secret:
+                    tile = secretTile;
+                    break;
+
+                case RoomType.Reward:
+                    tile = rewardTile;
+                    break;
+
+                case RoomType.Exploration:
+                    tile = explorationTile;
+                    break;
+
+                case RoomType.Combat:
+                    // 기본 floorTile 유지
+                    tile = combatTile;
+                    break;
+            }
+
+            // tile null 방지
+            if (tile == null)
+                tile = floorTile;
+
             for (int x = room.x; x < room.xMax; x++)
             {
                 for (int y = room.y; y < room.yMax; y++)
                 {
-                    floorTilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                    floorTilemap.SetTile(new Vector3Int(x, y, 0), tile);
                 }
             }
         }
@@ -254,6 +408,89 @@ public class BSPDungeonGenerator : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Space))
         {
             GenerateDungeon();
+        }
+        else if (Input.GetKeyDown(KeyCode.End))
+        {
+            GenerateNewMap();
+        }
+    }
+
+    void CollectRooms(BSPNode node)
+    {
+        if (node.IsLeaf())
+        {
+            if (node.room.width > 0)
+                rooms.Add(node);
+        }
+        else
+        {
+            if (node.left != null) CollectRooms(node.left);
+            if (node.right != null) CollectRooms(node.right);
+        }
+    }
+
+    void AssignRoomTypes()
+    {
+        if (rooms.Count == 0) return;
+
+        // 1. Start Room
+        BSPNode startRoom = rooms[0];
+
+        // 2. Boss Room (가장 먼 방)
+        BSPNode bossRoom = startRoom;
+        float maxDist = 0;
+
+        foreach (var room in rooms)
+        {
+            float dist = Vector2.Distance(startRoom.Center, room.Center);
+            if (dist > maxDist)
+            {
+                maxDist = dist;
+                bossRoom = room;
+            }
+        }
+
+        bossRoom.roomType = RoomType.Boss;
+
+        // 3. Secret Room (leaf + 확률)
+        foreach (var room in rooms)
+        {
+            if (room.roomType == RoomType.None &&
+                room.connectedNodes.Count == 1 &&
+                Random.value < 0.2f)
+            {
+                room.roomType = RoomType.Secret;
+            }
+        }
+
+        // 4. Reward Room
+        foreach (var room in rooms)
+        {
+            if (room.roomType == RoomType.None &&
+                room.connectedNodes.Count == 1 &&
+                Random.value < 0.3f)
+            {
+                room.roomType = RoomType.Reward;
+            }
+        }
+
+        // 5. Exploration Room (연결 많음)
+        foreach (var room in rooms)
+        {
+            if (room.roomType == RoomType.None &&
+                room.connectedNodes.Count >= 3)
+            {
+                room.roomType = RoomType.Exploration;
+            }
+        }
+
+        // 6. 나머지 → Combat
+        foreach (var room in rooms)
+        {
+            if (room.roomType == RoomType.None)
+            {
+                room.roomType = RoomType.Combat;
+            }
         }
     }
 }

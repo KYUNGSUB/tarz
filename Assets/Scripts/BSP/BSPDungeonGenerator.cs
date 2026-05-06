@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using System.IO;
@@ -32,8 +32,19 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     private BSPNode root;
     // private List<RectInt> rooms = new List<RectInt>();
-    List<BSPNode> rooms = new List<BSPNode>();
+    // List<BSPNode> rooms = new List<BSPNode>();
+    List<RoomNode> rooms = new List<RoomNode>();
+
     private List<Vector2Int> corridors = new List<Vector2Int>();
+
+    public class RoomNode
+    {
+        public RectInt room;
+        public Vector2Int center;
+        public List<Vector2Int> doors = new List<Vector2Int>();
+        public RoomType roomType;
+        public List<RoomNode> connections = new List<RoomNode>();
+    }
 
     public enum RoomType
     {
@@ -54,10 +65,10 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         ClearMap();
         
-        // 1. ÀúÀåµÈ seed ·Îµå ½Ãµµ
+        // 1. ì €ì¥ëœ seed ë¡œë“œ ì‹œë„
         bool loaded = LoadSeed();
 
-        // 2. seed °áÁ¤
+        // 2. seed ê²°ì •
         if (!loaded)
         {
             if (useRandomSeed)
@@ -66,21 +77,17 @@ public class BSPDungeonGenerator : MonoBehaviour
             }
         }
 
-        // 3. ·£´ı ÃÊ±âÈ­ (ÇÙ½É)
+        // 3. ëœë¤ ì´ˆê¸°í™” (í•µì‹¬)
         Random.InitState(seed);
 
         Debug.Log("Current Seed: " + seed);
 
-        // 4. ±âÁ¸ BSP ·ÎÁ÷ ±×´ë·Î À¯Áö
+        // 4. ê¸°ì¡´ BSP ë¡œì§ ê·¸ëŒ€ë¡œ ìœ ì§€
         root = new BSPNode(new RectInt(0, 0, mapWidth, mapHeight));
 
         Split(root);
         CreateRooms(root);
         ConnectRooms(root);
-
-        // ¡Ú Ãß°¡
-        rooms.Clear();
-        CollectRooms(root);
 
         AssignRoomTypes();
 
@@ -88,15 +95,15 @@ public class BSPDungeonGenerator : MonoBehaviour
         DrawCorridors();
         DrawWalls();
 
-        // 5. »ı¼º ÈÄ seed ÀúÀå
+        // 5. ìƒì„± í›„ seed ì €ì¥
         SaveSeed();
     }
 
-    public void GenerateNewMap()    // °­Á¦·Î »õ·Î¿î ¸Ê ¸¸µé±â
+    public void GenerateNewMap()    // ê°•ì œë¡œ ìƒˆë¡œìš´ ë§µ ë§Œë“¤ê¸°
     {
         useRandomSeed = true;
 
-        // ±âÁ¸ ÆÄÀÏ »èÁ¦
+        // ê¸°ì¡´ íŒŒì¼ ì‚­ì œ
         string path = GetSeedPath();
         if (File.Exists(path))
             File.Delete(path);
@@ -111,7 +118,7 @@ public class BSPDungeonGenerator : MonoBehaviour
         public BSPNode right;
         public RectInt room;
 
-        // Ãß°¡
+        // ì¶”ê°€
         public RoomType roomType = RoomType.None;
         public Vector2Int Center => new Vector2Int(
             room.x + room.width / 2,
@@ -135,7 +142,7 @@ public class BSPDungeonGenerator : MonoBehaviour
     public class MapSeedData
     {
         public int seed;
-        // public int difficulty;   // seed +  °ÔÀÓ »óÅÂ ÇÔ²² °ü¸®
+        // public int difficulty;   // seed +  ê²Œì„ ìƒíƒœ í•¨ê»˜ ê´€ë¦¬
         // public int level;
     }
 
@@ -177,7 +184,7 @@ public class BSPDungeonGenerator : MonoBehaviour
 
     void Split(BSPNode node)
     {
-        // ´õ ÀÌ»ó ºĞÇÒÇÒ ¼ö ¾ø´Â °æ¿ì
+        // ë” ì´ìƒ ë¶„í• í•  ìˆ˜ ì—†ëŠ” ê²½ìš°
         if (node.area.width < minSplitSize * 2 &&
             node.area.height < minSplitSize * 2)
         {
@@ -186,7 +193,7 @@ public class BSPDungeonGenerator : MonoBehaviour
 
         bool splitHorizontal = Random.value > 0.5f;
 
-        // ºñÀ² ±â¹İ ¹æÇâ º¸Á¤ (ÇÑÂÊÀÌ ³Ê¹« ±æ¸é ±× ¹æÇâÀ¸·Î ºĞÇÒ)
+        // ë¹„ìœ¨ ê¸°ë°˜ ë°©í–¥ ë³´ì • (í•œìª½ì´ ë„ˆë¬´ ê¸¸ë©´ ê·¸ ë°©í–¥ìœ¼ë¡œ ë¶„í• )
         if (node.area.width > node.area.height && node.area.width / (float)node.area.height >= 1.25f)
         {
             splitHorizontal = false;
@@ -196,9 +203,9 @@ public class BSPDungeonGenerator : MonoBehaviour
             splitHorizontal = true;
         }
 
-        if (splitHorizontal)    // ¼öÁ÷À¸·Î ÀÚ¸¥´Ù
+        if (splitHorizontal)    // ìˆ˜ì§ìœ¼ë¡œ ìë¥¸ë‹¤
         {
-            // ³ôÀÌ ±âÁØ ºĞÇÒ °¡´É ¿©ºÎ È®ÀÎ
+            // ë†’ì´ ê¸°ì¤€ ë¶„í•  ê°€ëŠ¥ ì—¬ë¶€ í™•ì¸
             if (node.area.height < minSplitSize * 2)
                 return;
 
@@ -217,8 +224,8 @@ public class BSPDungeonGenerator : MonoBehaviour
                 node.area.height - split));
         }
         else
-        {                       // ¼öÆòÀ¸·Î 
-            // ³Êºñ ±âÁØ ºĞÇÒ °¡´É ¿©ºÎ È®ÀÎ
+        {                       // ìˆ˜í‰ìœ¼ë¡œ 
+            // ë„ˆë¹„ ê¸°ì¤€ ë¶„í•  ê°€ëŠ¥ ì—¬ë¶€ í™•ì¸
             if (node.area.width < minSplitSize * 2)
                 return;
 
@@ -245,26 +252,60 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         if (node.IsLeaf())
         {
+            // ìµœì†Œ í¬ê¸° ì²´í¬
             if (node.area.width < minRoomSize + 2 || 
             node.area.height < minRoomSize + 2)
             {
-                return; // ¹æ »ı¼º ¾È ÇÔ
+                return; // ë°© ìƒì„± ì•ˆ í•¨
             }
 
-            int roomWidth = Random.Range(minRoomSize, node.area.width - 2);
-            int roomHeight = Random.Range(minRoomSize, node.area.height - 2);
+            // ë°© í¬ê¸° ìƒì„±
+            int roomWidth = Random.Range(minRoomSize, node.area.width - 1);
+            int roomHeight = Random.Range(minRoomSize, node.area.height - 1);
 
-            int x = Random.Range(node.area.x + 1, node.area.xMax - roomWidth - 1);
-            int y = Random.Range(node.area.y + 1, node.area.yMax - roomHeight - 1);
+            // ë°© ìœ„ì¹˜ ìƒì„± (ë²½ ì—¬ìœ  1ì¹¸ ìœ ì§€)
+            int x = Random.Range(node.area.x + 1, node.area.xMax - roomWidth);
+            int y = Random.Range(node.area.y + 1, node.area.yMax - roomHeight);
 
-            node.room = new RectInt(x, y, roomWidth, roomHeight);
-            rooms.Add(node);
+            RectInt roomRect = new RectInt(x, y, roomWidth, roomHeight);
+
+            // âœ… RoomNode ìƒì„±
+            RoomNode roomNode = new RoomNode();
+            roomNode.room = roomRect;
+            roomNode.center = CalculateCenter(roomRect);
+            roomNode.roomType = RoomType.None;
+
+            // (ì„ íƒ) ë””ë²„ê¹…ìš©ìœ¼ë¡œ BSPNodeì—ë„ ì €ì¥ ê°€ëŠ¥
+            node.room = roomRect;
+
+            // âœ… rooms ë¦¬ìŠ¤íŠ¸ì— RoomNode ì¶”ê°€
+            rooms.Add(roomNode);
         }
         else
         {
             if (node.left != null) CreateRooms(node.left);
             if (node.right != null) CreateRooms(node.right);
         }
+    }
+
+    RoomType GetRandomRoomType()
+    {
+        float r = Random.value;
+
+        if (r < 0.6f) return RoomType.Combat;
+        if (r < 0.75f) return RoomType.Exploration;
+        if (r < 0.9f) return RoomType.Reward;
+        if (r < 0.97f) return RoomType.Secret;
+
+        return RoomType.Boss;
+    }
+
+    Vector2Int CalculateCenter(RectInt room)
+    {
+        return new Vector2Int(
+            room.xMin + room.width / 2,
+            room.yMin + room.height / 2
+        );
     }
 
     void ConnectRooms(BSPNode node)
@@ -274,11 +315,8 @@ public class BSPDungeonGenerator : MonoBehaviour
             Vector2Int p1 = GetRoomCenter(node.left);
             Vector2Int p2 = GetRoomCenter(node.right);
 
-            CreateCorridor(p1, p2);
-
-            // ¡Ú Ãß°¡: ¿¬°á Á¤º¸ ÀúÀå
-            node.left.connectedNodes.Add(node.right);
-            node.right.connectedNodes.Add(node.left);
+            var corridor = CreateCorridor(p1, p2);
+            corridors.AddRange(corridor);
 
             ConnectRooms(node.left);
             ConnectRooms(node.right);
@@ -297,21 +335,45 @@ public class BSPDungeonGenerator : MonoBehaviour
         return Random.value > 0.5f ? GetRoomCenter(node.left) : GetRoomCenter(node.right);
     }
 
-    void CreateCorridor(Vector2Int from, Vector2Int to)
+    List<Vector2Int> CreateCorridor(Vector2Int start, Vector2Int end)
     {
-        Vector2Int pos = from;
+        List<Vector2Int> corridor = new List<Vector2Int>();
 
-        while (pos.x != to.x)
+        Vector2Int current = start;
+
+        // ë°©í–¥ ëœë¤ (ìì—°ìŠ¤ëŸ¬ì›€)
+        bool horizontalFirst = Random.value > 0.5f;
+
+        if (horizontalFirst)
         {
-            corridors.Add(pos);
-            pos.x += (to.x > pos.x) ? 1 : -1;
+            while (current.x != end.x)
+            {
+                current.x += (end.x > current.x) ? 1 : -1;
+                corridor.Add(current);
+            }
+
+            while (current.y != end.y)
+            {
+                current.y += (end.y > current.y) ? 1 : -1;
+                corridor.Add(current);
+            }
+        }
+        else
+        {
+            while (current.y != end.y)
+            {
+                current.y += (end.y > current.y) ? 1 : -1;
+                corridor.Add(current);
+            }
+
+            while (current.x != end.x)
+            {
+                current.x += (end.x > current.x) ? 1 : -1;
+                corridor.Add(current);
+            }
         }
 
-        while (pos.y != to.y)
-        {
-            corridors.Add(pos);
-            pos.y += (to.y > pos.y) ? 1 : -1;
-        }
+        return corridor;
     }
 
     void DrawRooms()
@@ -320,7 +382,7 @@ public class BSPDungeonGenerator : MonoBehaviour
         {
             RectInt room = node.room;
 
-            // ¹æ À¯È¿¼º Ã¼Å©
+            // ë°© ìœ íš¨ì„± ì²´í¬
             if (room.width <= 0 || room.height <= 0)
                 continue;
 
@@ -345,12 +407,12 @@ public class BSPDungeonGenerator : MonoBehaviour
                     break;
 
                 case RoomType.Combat:
-                    // ±âº» floorTile À¯Áö
+                    // ê¸°ë³¸ floorTile ìœ ì§€
                     tile = combatTile;
                     break;
             }
 
-            // tile null ¹æÁö
+            // tile null ë°©ì§€
             if (tile == null)
                 tile = floorTile;
 
@@ -368,8 +430,21 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         foreach (var pos in corridors)
         {
-            floorTilemap.SetTile(new Vector3Int(pos.x, pos.y, 0), floorTile);
+            if (!IsInsideAnyRoom(pos))
+            {
+                floorTilemap.SetTile(new Vector3Int(pos.x, pos.y, 0), floorTile);
+            }
         }
+    }
+
+    bool IsInsideAnyRoom(Vector2Int pos)
+    {
+        foreach (var room in rooms)
+        {
+            if (room.room.Contains(pos))
+                return true;
+        }
+        return false;
     }
 
     void DrawWalls()
@@ -415,34 +490,25 @@ public class BSPDungeonGenerator : MonoBehaviour
         }
     }
 
-    void CollectRooms(BSPNode node)
-    {
-        if (node.IsLeaf())
-        {
-            if (node.room.width > 0)
-                rooms.Add(node);
-        }
-        else
-        {
-            if (node.left != null) CollectRooms(node.left);
-            if (node.right != null) CollectRooms(node.right);
-        }
-    }
-
     void AssignRoomTypes()
     {
+        Debug.Log("Room Count: " + rooms.Count);
         if (rooms.Count == 0) return;
 
-        // 1. Start Room
-        BSPNode startRoom = rooms[0];
+        // 0. ì´ˆê¸°í™”
+        foreach (var room in rooms)
+            room.roomType = RoomType.None;
 
-        // 2. Boss Room (°¡Àå ¸Õ ¹æ)
-        BSPNode bossRoom = startRoom;
+        // 1. Start Room
+        RoomNode startRoom = rooms[0];
+
+        // 2. Boss Room (ê°€ì¥ ë¨¼ ë°©)
+        RoomNode bossRoom = startRoom;
         float maxDist = 0;
 
         foreach (var room in rooms)
         {
-            float dist = Vector2.Distance(startRoom.Center, room.Center);
+            float dist = Vector2.Distance(startRoom.center, room.center);
             if (dist > maxDist)
             {
                 maxDist = dist;
@@ -452,11 +518,15 @@ public class BSPDungeonGenerator : MonoBehaviour
 
         bossRoom.roomType = RoomType.Boss;
 
-        // 3. Secret Room (leaf + È®·ü)
+        // 3. Secret Room (leaf + í™•ë¥ )
         foreach (var room in rooms)
         {
+            /*
             if (room.roomType == RoomType.None &&
-                room.connectedNodes.Count == 1 &&
+                room.connections.Count == 1 &&
+                Random.value < 0.2f)
+            */
+                if (room.roomType == RoomType.None &&
                 Random.value < 0.2f)
             {
                 room.roomType = RoomType.Secret;
@@ -467,24 +537,24 @@ public class BSPDungeonGenerator : MonoBehaviour
         foreach (var room in rooms)
         {
             if (room.roomType == RoomType.None &&
-                room.connectedNodes.Count == 1 &&
+                room.connections.Count == 1 &&
                 Random.value < 0.3f)
             {
                 room.roomType = RoomType.Reward;
             }
         }
 
-        // 5. Exploration Room (¿¬°á ¸¹À½)
+        // 5. Exploration Room (ì—°ê²° ë§ìŒ)
         foreach (var room in rooms)
         {
             if (room.roomType == RoomType.None &&
-                room.connectedNodes.Count >= 3)
+                room.connections.Count >= 3)
             {
                 room.roomType = RoomType.Exploration;
             }
         }
 
-        // 6. ³ª¸ÓÁö ¡æ Combat
+        // 6. ë‚˜ë¨¸ì§€ â†’ Combat
         foreach (var room in rooms)
         {
             if (room.roomType == RoomType.None)
@@ -492,5 +562,37 @@ public class BSPDungeonGenerator : MonoBehaviour
                 room.roomType = RoomType.Combat;
             }
         }
+    }
+
+    Vector2Int GetDoorPosition(RoomNode roomNode, Vector2Int targetCenter)
+    {
+        RectInt room = roomNode.room;
+        Vector2Int center = roomNode.center;
+
+        int x, y;
+
+        // ë°©í–¥ íŒë‹¨ (ë” ê¸´ ì¶• ê¸°ì¤€)
+        if (Mathf.Abs(targetCenter.x - center.x) > Mathf.Abs(targetCenter.y - center.y))
+        {
+            // ì¢Œ/ìš° ë²½ ì„ íƒ
+            if (targetCenter.x > center.x)
+                x = room.xMax - 1;   // ì˜¤ë¥¸ìª½ ë²½
+            else
+                x = room.xMin;       // ì™¼ìª½ ë²½
+
+            y = Random.Range(room.yMin + 1, room.yMax - 1);
+        }
+        else
+        {
+            // ìƒ/í•˜ ë²½ ì„ íƒ
+            if (targetCenter.y > center.y)
+                y = room.yMax - 1;   // ìœ„ìª½ ë²½
+            else
+                y = room.yMin;       // ì•„ë˜ìª½ ë²½
+
+            x = Random.Range(room.xMin + 1, room.xMax - 1);
+        }
+
+        return new Vector2Int(x, y);
     }
 }

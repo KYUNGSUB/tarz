@@ -259,13 +259,20 @@ public class BSPDungeonGenerator : MonoBehaviour
                 return; // 방 생성 안 함
             }
 
-            // 방 크기 생성
-            int roomWidth = Random.Range(minRoomSize, node.area.width - 1);
-            int roomHeight = Random.Range(minRoomSize, node.area.height - 1);
+            // Room Margin 확보
+            int margin = 5;
 
-            // 방 위치 생성 (벽 여유 1칸 유지)
-            int x = Random.Range(node.area.x + 1, node.area.xMax - roomWidth);
-            int y = Random.Range(node.area.y + 1, node.area.yMax - roomHeight);
+            int maxWidth = node.area.width - margin * 2;
+            int maxHeight = node.area.height - margin * 2;
+
+            if (maxWidth < minRoomSize || maxHeight < minRoomSize)
+                return;
+
+            int roomWidth = Random.Range(minRoomSize, maxWidth);
+            int roomHeight = Random.Range(minRoomSize, maxHeight);
+
+            int x = Random.Range(node.area.x + margin, node.area.xMax - roomWidth - margin);
+            int y = Random.Range(node.area.y + margin, node.area.yMax - roomHeight - margin);
 
             RectInt roomRect = new RectInt(x, y, roomWidth, roomHeight);
 
@@ -430,10 +437,13 @@ public class BSPDungeonGenerator : MonoBehaviour
     {
         foreach (var pos in corridors)
         {
+            /*
             if (!IsInsideAnyRoom(pos))
             {
                 floorTilemap.SetTile(new Vector3Int(pos.x, pos.y, 0), floorTile);
             }
+            */
+            PaintCorridor(pos);
         }
     }
 
@@ -594,5 +604,38 @@ public class BSPDungeonGenerator : MonoBehaviour
         }
 
         return new Vector2Int(x, y);
+    }
+
+    void PaintCorridor(Vector2Int pos)
+    {
+        int halfWidth = 1; // 1 → 3칸, 2 → 5칸 추천
+
+        for (int dx = -halfWidth; dx <= halfWidth; dx++)
+        {
+            for (int dy = -halfWidth; dy <= halfWidth; dy++)
+            {
+                Vector2Int p = pos + new Vector2Int(dx, dy);
+
+                if (!IsInsideAnyRoom(p) && !IsNearRoom(p))
+                {
+                    floorTilemap.SetTile(new Vector3Int(p.x, p.y, 0), floorTile);
+                }
+            }
+        }
+    }
+
+    bool IsNearRoom(Vector2Int pos)
+    {
+        foreach (var room in rooms)
+        {
+            RectInt r = room.room;
+
+            if (pos.x >= r.xMin - 1 && pos.x <= r.xMax + 1 &&
+                pos.y >= r.yMin - 1 && pos.y <= r.yMax + 1)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }
